@@ -1,7 +1,8 @@
 Notation MIPS Preprocessor
 ==========================
 
-## example
+using notation to accelerate the coding of MIPS Assembly
+## Example
 
 ```
 @function max(u, k)

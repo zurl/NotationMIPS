@@ -5,15 +5,13 @@ const script=`
 @function max(u, k)
 @treg i, pui, ui
     lw $v0, 0(%u)
-    addi %i, $zero, 1
-    @while(i < k)
+    @repeat(i, 1, k)
         add %pui, %u, %i
         lw %ui, 0(%pui)
         @if(ui > $v0)
             add $v0, %ui, $zero
         @endif
-        addi %i, %i, 1
-    @endwhile
+    @endrepeat
 `;
 
 function lookup(ctx, name){
@@ -38,6 +36,7 @@ function generateFunction(ctx){
         current += 4;
     }
     for(let cmd of ctx.buffer){
+        if(/^\s*$/.test(cmd))continue;
         if(cmd.indexOf(':')!=-1)ctx.result.push(cmd.replace(/^\s*/,''));
         else ctx.result.push(cmd.replace(/^\s*/,'    '));
     }
@@ -66,6 +65,11 @@ function parseConditionItem(ctx, raw){
     }
     if(parseInt(raw) === 0)return '$zero';
     return null;
+}
+
+function parseRegOrImm(ctx, raw){
+    if(!isNaN(parseInt(raw)))return parseInt(raw);
+    else return parseConditionItem(raw);
 }
 
 function parseCondition(ctx, raw){
@@ -292,7 +296,7 @@ const NotationHandler = {
                 ctx.error(ctx.i, "too much treg variables");
                 return;
             }
-            ctx.tregs[name] = `$s${num}`;
+            ctx.tregs[name] = `$t${num}`;
         }
         return true;
     },
@@ -344,6 +348,30 @@ const NotationHandler = {
         ctx.flowstack.push({type:'while', no: no});
         return true;
     },
+    "@repeat": function(cmd, ctx){
+        const tuple = /@repeat\s*\(\s*(.*)\s*\)/.exec(cmd);
+        const no = ++ctx.flowno;
+        
+        const data = tuple[1].split(/\s*,\s*/);
+        const l = parseConditionItem(ctx, data[0]);
+        const m = parseRegOrImm(ctx, data[1]);
+        const r = parseConditionItem(ctx, data[2]);
+        if(!l || !r){
+            ctx.error(ctx.i, "unknown repeat param (cannot be integer)");
+            return;
+        }
+        if(typeof(m) == 'number'){
+            ctx.buffer.push(`    addi ${l}, $zero, ${m}`);
+        }
+        else{
+            ctx.buffer.push(`    add ${l}, $zero, ${m}`);
+        }
+        ctx.buffer.push(`${ctx.functionName}_head_${no}:`);
+        ctx.buffer.push(`    slt $ra, ${l}, ${r}`);
+        ctx.buffer.push(`    beq $ra, $zero, ${ctx.functionName}_end_${no}`);
+        ctx.flowstack.push({type:'repeat', no: no});
+        return true;
+    },
     "@endwhile": function(cmd, ctx){
         if(!ctx.flowstack[ctx.flowstack.length - 1] || ctx.flowstack[ctx.flowstack.length - 1].type!='while'){
             ctx.error(ctx.i, "unknown endwhile");
@@ -355,6 +383,17 @@ const NotationHandler = {
         ctx.flowstack.pop();
         return true;
     },
+    "@endrepeat": function(cmd, ctx){
+        if(!ctx.flowstack[ctx.flowstack.length - 1] || ctx.flowstack[ctx.flowstack.length - 1].type!='repeat'){
+            ctx.error(ctx.i, "unknown endrepeat");
+            return;
+        }
+        const no = ctx.flowstack[ctx.flowstack.length - 1].no;
+        ctx.buffer.push(`j ${ctx.functionName}_head_${no}`);
+        ctx.buffer.push(`${ctx.functionName}_end_${no}:`);
+        ctx.flowstack.pop();
+        return true;
+    }
 };
 
 function preprocess(script, error){
@@ -494,8 +533,11 @@ function preprocess(script, error){
         }
     }
     if(ctx.functionName != null)generateFunction(ctx);
-    return ctx.result.join('\n');
+    return ctx.result;
 }
-
+const optimize = require('./optim');
 const data = preprocess(script, (i, text)=>console.log(`ERROR at ${i}: ${text}`));
-console.log(data);
+let result = optimize.optimize(data);
+console.log(data.join('\n'));
+console.log('====');
+console.log(result.join('\n'));
