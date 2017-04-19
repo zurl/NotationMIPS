@@ -3,18 +3,55 @@ lw, sw, addi, jr, jal, j
 */
 const script=`
 @function max(u, k)
-@treg i, pui, ui
-    lw $v0, 0(%u)
+@alias m $v0
+@treg i, uiaddr, ui
+    lw %m, 0(%u)
     @repeat(i, 1, k)
-        add %pui, %u, %i
-        lw %ui, 0(%pui)
-        @if(ui > $v0)
-            add $v0, %ui, $zero
+        sll %uiaddr, %i, 2
+        add %uiaddr, %uiaddr, %u
+        lw %ui, 0(%uiaddr)
+        @if(ui > m)
+            add %m, %ui, $zero
         @endif
     @endrepeat
+    @return m
+
+@function strlen(u)
+@alias m $v0
+@treg umaddr, um
+    addi %m, $zero, $zero
+strlen_loop:
+    sll %umaddr, %m, 2
+    add %umaddr, %u, %umaddr
+    lw %um, 0(%umaddr)
+    bne %um, $zero, strlen_loop
+
+@function sum(u, k)
+@alias m $v0
+@treg i, uiaddr, ui
+    lw %m, 0(%u)
+    @repeat(i, 1, k)
+        sll %uiaddr, %i, 2
+        add %uiaddr, %uiaddr, %u
+        lw %ui, 0(%uiaddr)
+        add %m, %ui, %m
+    @endrepeat
+    @return m
+
+@function mmax(u, k)
+@alias m $v0
+@treg i, uiaddr
+    @call max(u, k)
+    @repeat(i, 0, k)
+        sll %uiaddr, %i, 2
+        add %uiaddr, %uiaddr, %u
+        sw %m, 0(%uiaddr)
+    @endrepeat
+
 `;
 
 function lookup(ctx, name){
+    if(ctx.alias.hasOwnProperty(name))return ctx.alias[name];
     if(ctx.sregs.hasOwnProperty(name))return ctx.sregs[name];
     if(ctx.tregs.hasOwnProperty(name))return ctx.tregs[name];
     if(ctx.locals.hasOwnProperty(name))return ctx.locals[name];
@@ -59,6 +96,7 @@ function parseConditionItem(ctx, raw){
         return raw;
     }
     else{
+        if(ctx.alias.hasOwnProperty(raw))return ctx.alias[raw];
         if(ctx.sregs.hasOwnProperty(raw))return ctx.sregs[raw];
         if(ctx.tregs.hasOwnProperty(raw))return ctx.tregs[raw];
         if(ctx.params.hasOwnProperty(raw) && typeof(ctx.params[raw]) == 'string')return ctx.params[raw];
@@ -131,6 +169,7 @@ const NotationHandler = {
         const funcName = tuple[1];
         const params = tuple[2].split(/\s*,\s*/);
         ctx.sregs = {};
+        ctx.alias = {};
         ctx.tregs = {};
         ctx.locals = {};
         ctx.params = {};
@@ -146,6 +185,7 @@ const NotationHandler = {
             else{
                 ctx.params[param] = 4 * (current + 1);
             }
+            current++;
         }
         return true;
    },
@@ -154,7 +194,7 @@ const NotationHandler = {
         const name = tuple[1];
         if(name){
             if(name.indexOf('$') != -1){
-                ctx.buffer.push(`    add $v0, $zero, ${name}`);
+                if(name != '$v0')ctx.buffer.push(`    add $v0, $zero, ${name}`);
             }
             else if(!isNaN(parseInt(name))){
                 ctx.buffer.push(`    addi $v0, $zero, ${name}`);
@@ -175,6 +215,15 @@ const NotationHandler = {
         }
         ctx.buffer.push(`    j ${ctx.functionName}_end`);
         return true;
+   },
+   "@alias": function(cmd, ctx){
+        const tuple = cmd.split(/\s+/);
+        const name = tuple[1];
+        if(lookup(ctx, name) != null){
+            ctx.error(ctx.i, "redefine local varibale");
+            return;
+        }
+        ctx.alias[name] = tuple[2];
    },
    "@call": function(cmd, ctx){
         const tuple = /@call\s*([a-zA-Z_]+)\s*\(\s*(.*)\s*\)\s*(storeparam)?/.exec(cmd);
@@ -198,49 +247,49 @@ const NotationHandler = {
         let current = 0;
         for(let name of names){
             if(current <= 3){
-            if(name.indexOf('$') != -1){
-                ctx.buffer.push(`    add $a${current}, $zero, ${name}`);
-            }
-            else if(!isNaN(parseInt(name))){
-                ctx.buffer.push(`    addi $a${current}, $zero, ${name}`);
-            }
-            else{
-                const target = lookup(ctx, name);
-                if(target == null){
-                    ctx.error(ctx.i, "variable is not defined");
-                    return;
+                if(name.indexOf('$') != -1){
+                    ctx.buffer.push(`    add $a${current}, $zero, ${name}`);
                 }
-                if(typeof target == 'number'){
-                    ctx.buffer.push(`    lw $a${current}, ${target}($sp)`);
+                else if(!isNaN(parseInt(name))){
+                    ctx.buffer.push(`    addi $a${current}, $zero, ${name}`);
                 }
                 else{
-                    ctx.buffer.push(`    add $a${current}, $zero, ${target}`);
+                    const target = lookup(ctx, name);
+                    if(target == null){
+                        ctx.error(ctx.i, "variable is not defined");
+                        return;
+                    }
+                    if(typeof target == 'number'){
+                        ctx.buffer.push(`    lw $a${current}, ${target}($sp)`);
+                    }
+                    else{
+                        ctx.buffer.push(`    add $a${current}, $zero, ${target}`);
+                    }
                 }
             }
-            }
             else{
-            const pos = -4 * current;
-            if(name.indexOf('$') != -1){
-                ctx.buffer.push(`    sw ${name}, ${pos}($sp)`);
-            }
-            else if(!isNaN(parseInt(name))){
-                ctx.buffer.push(`    addi $at, $zero, ${name}`);
-                ctx.buffer.push(`    sw $at, ${pos}($sp)`);
-            }
-            else{
-                const target = lookup(ctx, name);
-                if(target == null){
-                    ctx.error(ctx.i, "variable is not defined");
-                    return;
+                const pos = -4 * current;
+                if(name.indexOf('$') != -1){
+                    ctx.buffer.push(`    sw ${name}, ${pos}($sp)`);
                 }
-                if(typeof target == 'number'){
-                    ctx.buffer.push(`    lw $at, ${name}($sp)`);
+                else if(!isNaN(parseInt(name))){
+                    ctx.buffer.push(`    addi $at, $zero, ${name}`);
                     ctx.buffer.push(`    sw $at, ${pos}($sp)`);
                 }
                 else{
-                    ctx.buffer.push(`    sw ${name}, ${pos}($sp)`);
+                    const target = lookup(ctx, name);
+                    if(target == null){
+                        ctx.error(ctx.i, "variable is not defined");
+                        return;
+                    }
+                    if(typeof target == 'number'){
+                        ctx.buffer.push(`    lw $at, ${name}($sp)`);
+                        ctx.buffer.push(`    sw $at, ${pos}($sp)`);
+                    }
+                    else{
+                        ctx.buffer.push(`    sw ${name}, ${pos}($sp)`);
+                    }
                 }
-            }
             }
             current ++;
         }
@@ -538,6 +587,6 @@ function preprocess(script, error){
 const optimize = require('./optim');
 const data = preprocess(script, (i, text)=>console.log(`ERROR at ${i}: ${text}`));
 let result = optimize.optimize(data);
-console.log(data.join('\n'));
-console.log('====');
+//console.log(data.join('\n'));
+//console.log('====');
 console.log(result.join('\n'));
