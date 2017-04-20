@@ -32,13 +32,41 @@ Declare some local variable on register or stack, sreg means `$s0`-`$s7`, treg m
 @local cnt
 ``` 
 
+### `@alias`
+
+name replacement, like `#define` in c
+```
+@function self(a)
+@alias ret $v0
+    addi %ret, $zero, 1
+``` 
+
+### `@if`, `@else` and `@endif`
+
+Condition control flow. like C-if.
+
+> if only support `single` comparation expression like a < b, constant are not supported
+
+```
+@function max(a,b)
+@alias m $v0
+@if(a > b)
+    add %m, %a, $zero
+@else
+    add %m, %b, $zero
+@endif
+```
+### `@while` and `@endwhile`
+
+### `@repeat` and `@endrepeat`
+
 ### `@@`
 Expression Generator ( Experimental )
 
 generate a series of MIPS assembly with syntax like C-expression.  
-allows +, -, *, &, |, ^, <, >, =  
-inter-register mutilplition are not allowed cuurently,
-
+> allows +, -, *, &, |, ^, <, >, =   
+inter-register mutilplition are not allowed cuurently,  
+optimization is poor currently.  
 ```
 @function domath(a, b)
 @alias ret $v0
