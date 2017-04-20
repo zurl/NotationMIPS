@@ -1,13 +1,8 @@
 const spiltRegex = /\s*(=|\+|(-?[0-9]+)|\*|-|\(|\)|\$?[a-zA-Z0-9_]+)\s*/g;
-
-function lookup(ctx, name){
-    if(ctx.alias.hasOwnProperty(name))return ctx.alias[name];
-    if(ctx.sregs.hasOwnProperty(name))return ctx.sregs[name];
-    if(ctx.tregs.hasOwnProperty(name))return ctx.tregs[name];
-    if(ctx.locals.hasOwnProperty(name))return ctx.locals[name];
-    if(ctx.params.hasOwnProperty(name))return ctx.params[name];
-    return null;
-}
+const common = require('./common');
+const applyRegister = common.applyRegister;
+const freeRegister = common.freeRegister;
+const lookup = common.lookup;
 
 function tokenize(str){
     let match;
@@ -113,21 +108,6 @@ function parseAssignment(ctx, exp){
 }
 const operatorMap = {'+':'add', '-': 'sub', '&': 'and', '|': 'or', '^': 'xor'};
 
-function applyRegister(ctx){
-    if(ctx.exptreg.length == 0){
-        ctx.error(0, 'tvariable are not enough');
-        return null;
-    }
-    const dst = ctx.exptreg.pop();
-    ctx.exptregu[dst] = true;
-    return dst;
-}
-function freeRegister(ctx, x){
-    if(ctx.exptregu[x] == true){
-        ctx.exptregu[x] = false;
-        ctx.exptreg.push(x);
-    }
-}
 
 function pr(x){
     if(typeof(x) == 'object')return "[" + x.map(y=>pr(y)).join(',') + "]";
@@ -186,6 +166,7 @@ function generateExpression(ctx, ast){
     else if(ast[0] == '='){
         if(typeof(r) == 'string'){
              ctx.buffer.push(`    add ${l}, $zero, ${r}`);
+             freeRegister(ctx, r);
         }
         else{
              ctx.buffer.push(`    addi ${l}, $zero, ${r}`);
@@ -237,10 +218,6 @@ function generateExpression(ctx, ast){
 }
 
 function dealExpression(ctx, exp){
-    const tlen = Object.keys(ctx.sregs).length;
-    ctx.exptreg = [];
-    ctx.exptregu = {};
-    for(let i = tlen;i<=9;i++)ctx.exptreg.push(`$t${i}`);
     const ast = parseAssignment(ctx, tokenize(exp));
     return generateExpression(ctx, ast);
 }

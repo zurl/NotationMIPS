@@ -5,20 +5,19 @@ lw, sw, addi, jr, jal, j
 const script = `
 @function domath(a, b)
 @alias ret $v0
-    @@(ret = 2 * a + 3 * (4 * b + a))
+@treg i
+    @while(i < 5)
+        @@(ret = ret + 2 * a + 3 * (4 * b + a))
+        @@(i = i + 1)
+    @endwhile
+    
 `;
 
 const expression = require('./expression');
-
-function lookup(ctx, name){
-    if(ctx.alias.hasOwnProperty(name))return ctx.alias[name];
-    if(ctx.sregs.hasOwnProperty(name))return ctx.sregs[name];
-    if(ctx.tregs.hasOwnProperty(name))return ctx.tregs[name];
-    if(ctx.locals.hasOwnProperty(name))return ctx.locals[name];
-    if(ctx.params.hasOwnProperty(name))return ctx.params[name];
-    return null;
-}
-
+const common = require('./common');
+const applyRegister = common.applyRegister;
+const freeRegister = common.freeRegister;
+const lookup = common.lookup;
 
 // |sp| local | sreg | ra | param(1, 2, 3, 4) | oldsp
 function generateFunction(ctx){
@@ -136,8 +135,12 @@ const NotationHandler = {
         ctx.params = {};
         ctx.buffer = [];
         ctx.flowstack = [];
+        ctx.exptreginit=false;
+        ctx.exptreg = [];
+        ctx.exptregu = {};
         ctx.flowno = 0;
         ctx.functionName = funcName;
+        ctx.condregister = null;
         let current = 0;
         for(let param of params){
             if(current <= 3){
@@ -421,7 +424,8 @@ function preprocess(script, error){
         locals: null,
         params: null,
         functionName : null,
-        error: error
+        error: error,
+        exptreginit: true
     };
     //scan function
     for(let i = 0; i < cmds.length; i++){
@@ -453,6 +457,14 @@ function preprocess(script, error){
             const ins = cmds[i].split(' ')[0];
             let flag = 0;
             ctx.i = i;
+            if(ctx.exptreginit==false){
+                if(ins.indexOf('@treg') == -1 && ins.indexOf('@sreg') == -1 &&
+                ins.indexOf('@local') == -1 && ins.indexOf('@alias') == -1){
+                    ctx.exptreginit = true;
+                    const tlen = Object.keys(ctx.sregs).length;
+                    for(let i = tlen;i<=9;i++)ctx.exptreg.push(`$t${i}`);
+                }
+            }
             for(const key of Object.keys(NotationHandler)){
                 if(ins.indexOf(key) != -1){
                     NotationHandler[key](cmds[i], ctx);
@@ -549,10 +561,15 @@ function preprocess(script, error){
     if(ctx.functionName != null)generateFunction(ctx);
     return ctx.result;
 }
+console.log(script);
 const optimizer = require('./optim');
-const data = preprocess(script, (i, text)=>console.log(`ERROR at ${i}: ${text}`));
+let isError = false;
+const data = preprocess(script, (i, text)=>{console.log(`ERROR at ${i}: ${text}`);isError=true;});
 let result = optimizer.optimize(data);
 //console.log(data.join('\n'));
 //console.log('====');
-console.log(script);
-console.log(result.join('\n'));
+if(!isError){
+    console.log(result.join('\n'));
+}
+
+  
