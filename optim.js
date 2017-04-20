@@ -3,6 +3,7 @@
 // repeat label
 // useless j
 // useless move
+// continuous optimiztion
 function optimize(code){
     let result = [];
     const result2 = [];
@@ -16,8 +17,13 @@ function optimize(code){
             const tuple = 
             /add\s*([a-zA-Z0-9$_]*)\s*,\s*([a-zA-Z0-9$_]*)\s*,\s*([a-zA-Z0-9$_]*)/.exec(code[i]);
             //console.log(tuple);
-            if(tuple[2] == '$zero' && tuple[1] == tuple[3])continue;
-            if(tuple[3] == '$zero' && tuple[1] == tuple[2])continue;
+            if(tuple[2] == '$zero'){
+                if(tuple[3] == tuple[1])continue;
+            }
+            if(tuple[3] == '$zero'){
+                if(tuple[2] == tuple[1])continue;
+                continue;
+            }
         }
         if(/^\s*j\s+/.test(code[i])){
             jname = /j\s*([a-zA-Z_$0-9]*)\s*/.exec(code[i])[1];

@@ -5,8 +5,9 @@ lw, sw, addi, jr, jal, j
 const script = `
 @function domath(a, b)
 @alias ret $v0
-@treg i
-    @while(i < 5)
+@treg i, iend
+    @@(iend = 5)
+    @while(i < iend)
         @@(ret = ret + 2 * a + 3 * (4 * b + a))
         @@(i = i + 1)
     @endwhile

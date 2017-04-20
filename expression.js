@@ -106,7 +106,10 @@ function parseAssignment(ctx, exp){
     if(!ast)return null;
     return ['=', exp[0], ast];
 }
-const operatorMap = {'+':'add', '-': 'sub', '&': 'and', '|': 'or', '^': 'xor'};
+const operatorMap = {
+    '+':'add', '-': 'sub', '&': 'and',
+    '-':'sub',
+     '|': 'or', '^': 'xor', '<': 'slt'};
 
 
 function pr(x){
@@ -175,14 +178,17 @@ function generateExpression(ctx, ast){
     else{
         if(typeof(l) == 'string' && typeof(r) == 'string'){
             freeRegister(ctx, r);
-            if(ctx.exptregu[l] == true){
-                ctx.buffer.push(`    ${operatorMap[ast[0]]} ${l}, ${l}, ${r}`);
-                return l;
-            }else{
-                const dst = applyRegister(ctx);
-                ctx.buffer.push(`    ${operatorMap[ast[0]]} ${dst}, ${l}, ${r}`);
-                return dst;
+            let dst = l;
+            if(ast[0] == '>'){
+                ctx.buffer.push(`    slt ${dst}, ${r}, ${l}`);
             }
+            else{
+                ctx.buffer.push(`    ${operatorMap[ast[0]]} ${dst}, ${l}, ${r}`);
+            }
+            if(ctx.exptregu[l] != true){
+                const dst = applyRegister(ctx);
+            }
+            return dst;;
         }
         else if(typeof(l) == 'string' && typeof(r) == 'number'){
             let dst = l;
@@ -190,7 +196,11 @@ function generateExpression(ctx, ast){
                 dst = applyRegister(ctx);;
             }
             if(ast[0] == '-'){
-                ctx.buffer.push(`    addi ${dst}, ${l}, -${r}`);
+                ctx.buffer.push(`    addi ${dst}, ${l}, ${-r}`);
+            }
+            else if(ast[0] == '>'){
+                ctx.buffer.push(`    slti ${dst}, ${l}, ${r}`);
+                ctx.buffer.push(`    xor ${dst}, ${dst}, 1`);
             }
             else{
                 ctx.buffer.push(`    ${operatorMap[ast[0]]}i ${dst}, ${l}, ${r}`);
@@ -203,8 +213,12 @@ function generateExpression(ctx, ast){
                 dst = applyRegister(ctx);;
             }
             if(ast[0] == '-'){
-                ctx.buffer.push(`    addi ${dst}, ${r}, -${l}`);
+                ctx.buffer.push(`    addi ${dst}, ${r}, ${-l}`);
                 ctx.buffer.push(`    sub ${dst}, $zero, ${dst}`);
+            }
+            else if(ast[0] == '>'){
+                 ctx.buffer.push(`    slti ${dst}, ${r}, ${l}`);
+                 ctx.buffer.push(`    xor ${dst}, ${dst}, 1`);
             }
             else{
                 ctx.buffer.push(`    ${operatorMap[ast[0]]}i ${dst}, ${r}, ${l}`);

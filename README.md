@@ -2,6 +2,55 @@ Notation MIPS Preprocessor
 ==========================
 
 using notation to accelerate the coding of MIPS Assembly
+
+## Notations
+
+### `@function` and `@return`
+
+Define a funtion like C function, it will own stack space, and can be called.  
+Parameters are supported under MIPS call standard($a0->$a3, and stack).  
+
+Function cannot be explicitly terminated semantically, only before another function start,  
+the former function will be terminated semantically.  
+
+```
+@function self(a)
+@return a
+``` 
+
+### `@call`
+
+### `@sreg`, `@treg` and `@local`
+
+Declare some local variable on register or stack, sreg means `$s0`-`$s7`, treg means,  
+`$t0`-`$t9`, local means stack variables.
+
+```
+@function self(a)
+@sreg a,b,c
+@treg i,j,k
+@local cnt
+``` 
+
+### `@@`
+Expression Generator ( Experimental )
+
+generate a series of MIPS assembly with syntax like C-expression.  
+allows +, -, *, &, |, ^, <, >, =  
+inter-register mutilplition are not allowed cuurently,
+
+```
+@function domath(a, b)
+@alias ret $v0
+@treg i, iend
+    @@(iend = 5)
+    @while(i < iend)
+        @@(ret = ret + 2 * a + 3 * (4 * b + a))
+        @@(i = i + 1)
+    @endwhile
+    
+```
+
 ## Example
 
 ```
