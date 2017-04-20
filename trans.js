@@ -1,54 +1,14 @@
 /*
 lw, sw, addi, jr, jal, j
 */
-const script=`
-@function max(u, k)
-@alias m $v0
-@treg i, uiaddr, ui
-    lw %m, 0(%u)
-    @repeat(i, 1, k)
-        sll %uiaddr, %i, 2
-        add %uiaddr, %uiaddr, %u
-        lw %ui, 0(%uiaddr)
-        @if(ui > m)
-            add %m, %ui, $zero
-        @endif
-    @endrepeat
-    @return m
 
-@function strlen(u)
-@alias m $v0
-@treg umaddr, um
-    addi %m, $zero, $zero
-strlen_loop:
-    sll %umaddr, %m, 2
-    add %umaddr, %u, %umaddr
-    lw %um, 0(%umaddr)
-    bne %um, $zero, strlen_loop
-
-@function sum(u, k)
-@alias m $v0
-@treg i, uiaddr, ui
-    lw %m, 0(%u)
-    @repeat(i, 1, k)
-        sll %uiaddr, %i, 2
-        add %uiaddr, %uiaddr, %u
-        lw %ui, 0(%uiaddr)
-        add %m, %ui, %m
-    @endrepeat
-    @return m
-
-@function mmax(u, k)
-@alias m $v0
-@treg i, uiaddr
-    @call max(u, k)
-    @repeat(i, 0, k)
-        sll %uiaddr, %i, 2
-        add %uiaddr, %uiaddr, %u
-        sw %m, 0(%uiaddr)
-    @endrepeat
-
+const script = `
+@function domath(a, b)
+@alias ret $v0
+    @@(ret = 2 * a + 3 * (4 * b + a))
 `;
+
+const expression = require('./expression');
 
 function lookup(ctx, name){
     if(ctx.alias.hasOwnProperty(name))return ctx.alias[name];
@@ -58,6 +18,7 @@ function lookup(ctx, name){
     if(ctx.params.hasOwnProperty(name))return ctx.params[name];
     return null;
 }
+
 
 // |sp| local | sreg | ra | param(1, 2, 3, 4) | oldsp
 function generateFunction(ctx){
@@ -92,7 +53,7 @@ function generateFunction(ctx){
 
 
 function parseConditionItem(ctx, raw){
-    if(raw.indexOf('$') != -1){
+    if(raw.charAt(0) == '$'){
         return raw;
     }
     else{
@@ -190,10 +151,10 @@ const NotationHandler = {
         return true;
    },
    "@return": function(cmd, ctx){
-        const tuple = /@return\s*([a-zA-Z_]+)?/.exec(cmd);
+        const tuple = /@return\s*([$a-zA-Z_]+)?/.exec(cmd);
         const name = tuple[1];
         if(name){
-            if(name.indexOf('$') != -1){
+            if(name.charAt(0) == '$'){
                 if(name != '$v0')ctx.buffer.push(`    add $v0, $zero, ${name}`);
             }
             else if(!isNaN(parseInt(name))){
@@ -247,7 +208,7 @@ const NotationHandler = {
         let current = 0;
         for(let name of names){
             if(current <= 3){
-                if(name.indexOf('$') != -1){
+                if(name.charAt(0) == '$'){
                     ctx.buffer.push(`    add $a${current}, $zero, ${name}`);
                 }
                 else if(!isNaN(parseInt(name))){
@@ -269,7 +230,7 @@ const NotationHandler = {
             }
             else{
                 const pos = -4 * current;
-                if(name.indexOf('$') != -1){
+                if(name.charAt(0) == '$'){
                     ctx.buffer.push(`    sw ${name}, ${pos}($sp)`);
                 }
                 else if(!isNaN(parseInt(name))){
@@ -442,6 +403,10 @@ const NotationHandler = {
         ctx.buffer.push(`${ctx.functionName}_end_${no}:`);
         ctx.flowstack.pop();
         return true;
+    },
+    "@@":function(cmd, ctx){
+         const tuple = /@@\s*\(\s*(.*)\s*\)/.exec(cmd);
+         expression.dealExpression(ctx, tuple[1]);
     }
 };
 
@@ -584,9 +549,10 @@ function preprocess(script, error){
     if(ctx.functionName != null)generateFunction(ctx);
     return ctx.result;
 }
-const optimize = require('./optim');
+const optimizer = require('./optim');
 const data = preprocess(script, (i, text)=>console.log(`ERROR at ${i}: ${text}`));
-let result = optimize.optimize(data);
+let result = optimizer.optimize(data);
 //console.log(data.join('\n'));
 //console.log('====');
+console.log(script);
 console.log(result.join('\n'));

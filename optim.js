@@ -54,8 +54,9 @@ function optimize(code){
     result = [];
     for(let i = 0; i < result2.length; i++){
         for(let key of Object.keys(replaceTable)){
-            result[i] = result2[i].replace(key, replaceTable[key]);
+            result2[i] = result2[i].replace(key, replaceTable[key]);
         }
+        result.push(result2[i]);
     }
     return result;
 }

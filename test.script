@@ -1,0 +1,45 @@
+@function max(u, k)
+@alias m $v0
+@treg i, uiaddr, ui
+    lw %m, 0(%u)
+    @repeat(i, 1, k)
+        sll %uiaddr, %i, 2
+        add %uiaddr, %uiaddr, %u
+        lw %ui, 0(%uiaddr)
+        @if(ui > m)
+            add %m, %ui, $zero
+        @endif
+    @endrepeat
+    @return m
+
+@function strlen(u)
+@alias m $v0
+@treg umaddr, um
+    addi %m, $zero, $zero
+strlen_loop:
+    sll %umaddr, %m, 2
+    add %umaddr, %u, %umaddr
+    lw %um, 0(%umaddr)
+    bne %um, $zero, strlen_loop
+
+@function sum(u, k)
+@alias m $v0
+@treg i, uiaddr, ui
+    lw %m, 0(%u)
+    @repeat(i, 1, k)
+        sll %uiaddr, %i, 2
+        add %uiaddr, %uiaddr, %u
+        lw %ui, 0(%uiaddr)
+        add %m, %ui, %m
+    @endrepeat
+    @return m
+
+@function mmax(u, k)
+@alias m $v0
+@treg i, uiaddr
+    @call max(u, k)
+    @repeat(i, 0, k)
+        sll %uiaddr, %i, 2
+        add %uiaddr, %uiaddr, %u
+        sw %m, 0(%uiaddr)
+    @endrepeat
