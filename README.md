@@ -3,82 +3,6 @@ Notation MIPS Preprocessor
 
 using notation to accelerate the coding of MIPS Assembly
 
-## Notations
-
-### `@function` and `@return`
-
-Define a funtion like C function, it will own stack space, and can be called.  
-Parameters are supported under MIPS call standard($a0->$a3, and stack).  
-
-Function cannot be explicitly terminated semantically, only before another function start,  
-the former function will be terminated semantically.  
-
-```
-@function self(a)
-@return a
-``` 
-
-### `@call`
-
-### `@sreg`, `@treg` and `@local`
-
-Declare some local variable on register or stack, sreg means `$s0`-`$s7`, treg means,  
-`$t0`-`$t9`, local means stack variables.
-
-```
-@function self(a)
-@sreg a,b,c
-@treg i,j,k
-@local cnt
-``` 
-
-### `@alias`
-
-name replacement, like `#define` in c
-```
-@function self(a)
-@alias ret $v0
-    addi %ret, $zero, 1
-``` 
-
-### `@if`, `@else` and `@endif`
-
-Condition control flow. like C-if.
-
-> if only support `single` comparation expression like a < b, constant are not supported
-
-```
-@function max(a,b)
-@alias m $v0
-@if(a > b)
-    add %m, %a, $zero
-@else
-    add %m, %b, $zero
-@endif
-```
-### `@while` and `@endwhile`
-
-### `@repeat` and `@endrepeat`
-
-### `@@`
-Expression Generator ( Experimental )
-
-generate a series of MIPS assembly with syntax like C-expression.  
-> allows +, -, *, &, |, ^, <, >, =   
-inter-register mutilplition are not allowed cuurently,  
-optimization is poor currently.  
-```
-@function domath(a, b)
-@alias ret $v0
-@treg i, iend
-    @@(iend = 5)
-    @while(i < iend)
-        @@(ret = ret + 2 * a + 3 * (4 * b + a))
-        @@(i = i + 1)
-    @endwhile
-    
-```
-
 ## Example
 
 ```
@@ -201,4 +125,120 @@ mmax_end_1:
     lw $ra, 0($sp)
     addi $sp, $sp, 12
     jr $ra
+```
+
+## Notations
+
+### `@function` and `@return`
+
+Define a funtion like C function, it will own stack space, and can be called.  
+Parameters are supported under MIPS call standard($a0->$a3, and stack).  
+
+Function cannot be explicitly terminated semantically, only before another function start,  
+the former function will be terminated semantically.  
+
+```
+@function self(a)
+@return a
+``` 
+
+### `@call`
+
+call a function, function do not need to be defined previously.
+
+```
+@function main(a)
+    @call self(1)
+@function self(a)
+@return a
+```
+
+### `@sreg`, `@treg` and `@local`
+
+Declare some local variable on register or stack, sreg means `$s0`-`$s7`, treg means,  
+`$t0`-`$t9`, local means stack variables.
+
+```
+@function self(a)
+@sreg a,b,c
+@treg i,j,k
+@local cnt
+``` 
+
+### `@alias`
+
+name replacement, like `#define` in c
+```
+@function self(a)
+@alias ret $v0
+    addi %ret, $zero, 1
+``` 
+
+### `@if`, `@else` and `@endif`
+
+Condition control flow. like C-if.
+
+> if only support `single` comparation expression like a < b, constant are not supported
+
+```
+@function max(a,b)
+@alias m $v0
+@if(a > b)
+    add %m, %a, $zero
+@else
+    add %m, %b, $zero
+@endif
+```
+### `@while` and `@endwhile`
+
+loop.  
+```
+@function domath(a, b)
+@alias ret $v0
+@treg i, iend
+    @@(iend = 5)
+    @while(i < iend)
+        @@(ret = ret + 2 * a + 3 * (4 * b + a))
+        @@(i = i + 1)
+    @endwhile
+```
+### `@repeat` and `@endrepeat`
+
+loop.  
+```
+@function max(u, k)
+@alias m $v0
+@treg i, uiaddr, ui
+    lw %m, 0(%u)
+    @repeat(i, 1, k)
+        sll %uiaddr, %i, 2
+        add %uiaddr, %uiaddr, %u
+        lw %ui, 0(%uiaddr)
+        @if(ui > m)
+            add %m, %ui, $zero
+        @endif
+    @endrepeat
+    @return m
+```
+
+### `@@`
+Expression Generator ( Experimental )
+
+generate a series of MIPS assembly with syntax like C-expression.  
+
+> allows +, -, *, &, |, ^, <, >, =   
+> allows deref(*) and subscript (a[1] / a[b])
+
+inter-register mutilplition are not allowed cuurently,  
+optimization is poor currently.  
+```
+@function domath(a, b)
+@alias ret $v0
+@treg i, iend
+    @@(iend = 5)
+    @while(i < iend)
+        @@(ret = ret + 2 * a + 3 * (4 * b + a))
+        @@(i = i + 1)
+    @endwhile
+    
 ```

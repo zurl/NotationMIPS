@@ -1,4 +1,0 @@
-
-
-
-console.log(tokenize(script));

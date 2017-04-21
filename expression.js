@@ -1,4 +1,4 @@
-const spiltRegex = /\s*(=|\+|(-?[0-9]+)|\*|-|\(|\)|\$?[a-zA-Z0-9_]+)\s*/g;
+const spiltRegex = /\s*(=|\+|(-?[0-9]+)|\*|-|\(|\)|\[|\]|\$?[a-zA-Z0-9_]+)\s*/g;
 const common = require('./common');
 const applyRegister = common.applyRegister;
 const freeRegister = common.freeRegister;
@@ -11,9 +11,17 @@ function tokenize(str){
     return result;
 }
 // | ^ & ( < > ) (+ -) (*)
-const nextTable = { '|': '^', '^':'&', '&':'<','<':'+','+':'*','*':'0'};
+const nextTable = { 'd': '|', '|': '^', '^':'&', '&':'<','<':'+','+':'*','*':'0'};
 function parseExpression(ctx, exp, target){
-    
+    if(target == 'd'){
+        if(exp[ctx.cpos] == '*'){
+            ctx.cpos++;
+            return ['d', parseExpression(ctx, exp, '0')];
+        }
+        else{
+            return parseExpression(ctx, exp, '|');
+        }
+    }
     let result = null;
     let status = 0; // 0 for lhs 1 for ope 2 for rhs
     let ope = null;
@@ -23,27 +31,44 @@ function parseExpression(ctx, exp, target){
             if(target == '0'){
                 if(exp[ctx.cpos] == '('){
                     ctx.cpos++;
-                    const tmp = parseExpression(ctx, exp, '|');
+                    const tmp = parseExpression(ctx, exp, 'd');
                     if(exp[ctx.cpos] != ')')return null;
                     buf = tmp;
                     ctx.cpos++;
                     return buf;
                 }
                 else{
+                    let ret = null;
                     if(exp[ctx.cpos].charAt(0) == '$'){
                         ctx.cpos++;
-                        return exp[ctx.cpos-1];
+                        ret = exp[ctx.cpos-1];
                     }
                     else{
                         let tmp = lookup(ctx, exp[ctx.cpos]);
                         if(!tmp){
                             if(!isNaN(parseInt(exp[ctx.cpos]))){
                                 ctx.cpos++;
-                                return parseInt(exp[ctx.cpos-1]);
+                                ret = parseInt(exp[ctx.cpos-1]);
                             }else return null;
                         }
+                        else{
+                            if(typeof(tmp) == 'number'){
+                                ret = ['l', tmp];
+                            }else{
+                                ctx.cpos++;
+                                ret = tmp;
+                            }
+                        }
+                    }
+                    if(exp[ctx.cpos] == '['){
                         ctx.cpos++;
-                        return tmp;
+                        const expr = parseExpression(ctx, exp, 'd');
+                        if(exp[ctx.cpos] != ']')return null;
+                        ctx.cpos++;
+                        return ['a', ret, expr];
+                    }
+                    else{
+                        return ret;
                     }
                 }
             }else{
@@ -94,7 +119,6 @@ function parseExpression(ctx, exp, target){
     }else return null;
 }
 
-
 function parseAssignment(ctx, exp){
     if(exp[1] != '=' ) return null;
     if(exp[0].charAt(0) != '$'){
@@ -102,14 +126,14 @@ function parseAssignment(ctx, exp){
         if(!exp[0])return null;
     }
     ctx.cpos = 2;
-    const ast = parseExpression(ctx, exp, '|');
+    const ast = parseExpression(ctx, exp, 'd');
     if(!ast)return null;
     return ['=', exp[0], ast];
 }
 const operatorMap = {
     '+':'add', '-': 'sub', '&': 'and',
     '-':'sub',
-     '|': 'or', '^': 'xor', '<': 'slt'};
+    '|': 'or', '^': 'xor', '<': 'slt'};
 
 
 function pr(x){
@@ -120,10 +144,30 @@ function generateExpression(ctx, ast){
     if(typeof(ast) == 'number')return ast;
     if(typeof(ast) == 'string')return ast;
     const l = generateExpression(ctx, ast[1]);
+    if(ast[0] == 'd'){
+        if(typeof(l) == 'number'){
+            const dst = applyRegister(ctx);
+            ctx.buffer.push(`    lw ${dst}, ${l}($zero)`);
+            return dst;
+        }
+        else{
+            let dst = l;
+            if(ctx.exptregu[l] != true){
+                dst = applyRegister(ctx);;
+            }
+            ctx.buffer.push(`    lw ${dst}, 0(${dst})`);
+            return dst;
+        }
+    }
+    else if( ast[0] == 'l'){
+        const dst = applyRegister(ctx);
+        ctx.buffer.push(`    lw ${dst}, ${l}($sp)`);
+        return dst;
+    }
     const r = generateExpression(ctx, ast[2]);
     if(ast[0] == '*'){
         if(typeof(l) == 'string' && typeof(r) == 'string'){
-            ctx.error(0, 'variable multiplication is not support currently');
+            ctx.error(0, 'variable multiplication is not supported currently');
             return null;
         }
         else if(typeof(l) == 'number' && typeof(r) == 'number'){
@@ -165,6 +209,21 @@ function generateExpression(ctx, ast){
             freeRegister(ctx, v);
             return sr;
         }
+    }
+    else if(ast[0] == 'a'){
+        if(typeof(l) == 'number')return null;
+        let dst = l;
+        if(ctx.exptregu[l] != true){
+            dst = applyRegister(ctx);
+        }
+        if(typeof(r) == 'string'){
+            ctx.buffer.push(`    add ${dst}, ${l}, ${r}`);
+            ctx.buffer.push(`    lw ${dst}, 0(${dst})`);
+        }
+        else{
+            ctx.buffer.push(`    lw ${dst}, ${r}(${l})`);
+        }
+        return dst;
     }
     else if(ast[0] == '='){
         if(typeof(r) == 'string'){
@@ -233,6 +292,7 @@ function generateExpression(ctx, ast){
 
 function dealExpression(ctx, exp){
     const ast = parseAssignment(ctx, tokenize(exp));
+    console.log(pr(ast));
     return generateExpression(ctx, ast);
 }
 

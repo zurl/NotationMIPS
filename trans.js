@@ -8,7 +8,7 @@ const script = `
 @treg i, iend
     @@(iend = 5)
     @while(i < iend)
-        @@(ret = ret + 2 * a + 3 * (4 * b + a))
+        @@(ret = ret + (*a) + 3 * (4 * b[1] + a))
         @@(i = i + 1)
     @endwhile
     
